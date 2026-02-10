@@ -70,7 +70,7 @@ static rclc_executor_t executor;
 
 // Publishers
 rcl_publisher_t pub_remote_steer, pub_remote_throttle, pub_remote_gear, pub_remote_override, pub_remote_connected;
-rcl_publisher_t imu_pub, encoders_pub, ina3221_pub, battery_pub;
+rcl_publisher_t imu_pub, encoders_pub, ina3221_pub, battery_pub, mcp9600_pub, mcp4725_pub, ina2xx_common_pub;
 
 // Subscriptions - ensure proper alignment
 static rcl_subscription_t sub_steer, sub_throttle, sub_gear, sub_diff;
@@ -171,6 +171,9 @@ bool create_entities() {
     RCCHECK(rclc_publisher_init_best_effort(&encoders_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, TwistWithCovarianceStamped), "/lli/sensor/encoders"));
     RCCHECK(rclc_publisher_init_best_effort(&ina3221_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina3221"));
     RCCHECK(rclc_publisher_init_best_effort(&battery_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, BatteryState), "/lli/battery/state"));
+    RCCHECK(rclc_publisher_init_best_effort(&mcp9600_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/mcp9600"));
+    RCCHECK(rclc_publisher_init_best_effort(&mcp4725_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/mcp4725"));
+    RCCHECK(rclc_publisher_init_best_effort(&ina2xx_common_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, BatteryState), "/lli/battery/fan"));
 
     // Subscriptions
     RCCHECK(rclc_subscription_init_best_effort(&sub_steer, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/lli/ctrl/steering"));
@@ -202,6 +205,9 @@ bool destroy_entities() {
     RCSOFTCHECK(rcl_publisher_fini(&imu_pub, &node));
     RCSOFTCHECK(rcl_publisher_fini(&encoders_pub, &node));
     RCSOFTCHECK(rcl_publisher_fini(&ina3221_pub, &node));
+    RCSOFTCHECK(rcl_publisher_fini(&mcp9600_pub, &node));
+    RCSOFTCHECK(rcl_publisher_fini(&mcp4725_pub, &node));
+    RCSOFTCHECK(rcl_publisher_fini(&ina2xx_common_pub, &node));
     RCSOFTCHECK(rcl_publisher_fini(&battery_pub, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_steer, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_throttle, &node));
