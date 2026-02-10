@@ -16,19 +16,14 @@
 /* For input event codes used by futaba,sbus */
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
-
-
 &usart2 {
     status = "okay";
     pinctrl-0 = <&usart2_rx_pa3>;
-    /* The SBUS driver configures 100000/8E2 at runtime; these are harmless */
     current-speed = <100000>;
     parity = "even";
     stop-bits = "2";
-    rx-invert;              /* SBUS is inverted */
-    /* optional: hw-flow-control = "none"; */
+    rx-invert;
 
-    /* Map SBUS channels to input events: 1=steer, 2=throttle, 4=diff_button, 6=gear, 5=override */
     sbus0: sbus {
         compatible = "futaba,sbus";
         status = "okay";
@@ -66,40 +61,47 @@
 
 &i2c2 {
     status = "okay";
-    clock-frequency = <I2C_BITRATE_FAST>; // Somethings weird with it, fast only works with too aggressive a pullup
+    clock-frequency = <I2C_BITRATE_FAST>;
 
-icm42670: icm42670@68 {
-    compatible = "invensense,icm42670p";
-    reg = <0x68>;
-    //int-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+    icm42670: icm42670@68 {
+        compatible = "invensense,icm42670p";
+        reg = <0x68>;
+        gyro-hz = <800>;
+        accel-hz = <800>;
+        accel-fs = <8>;
+        gyro-fs = <1000>;
+        status = "disabled";
+    };
 
-    gyro-hz = <800>;
-    accel-hz = <800>;
-    accel-fs = <8>;
-    gyro-fs = <1000>;
-    status = "disabled";
-};
-   ism330dlc: ism330dlc@6b {
+    ism330dlc: ism330dlc@6b {
         compatible = "st,ism330dlc";
         reg = <0x6b>;
-        //drdy-gpios = <&gpiod 0 GPIO_ACTIVE_HIGH>;
-        //int-pin = <1>;
         accel-odr = <9>;
         accel-range = <8>;
         gyro-odr = <8>;
         gyro-range = <1000>;
         status = "okay";
     };
+
     ina3221: ina3221@40 {
         compatible = "ti,ina3221";
         reg = <0x40>;
-        shunt-resistors = <4 8 8>; /* ESC=4 mOhm, 12V=8 mOhm, 5V=8 mOhm */
-        avg-mode = <1>;              /* 128-sample average for less noise */
-        conv-time-bus = <2>;         
-        conv-time-shunt = <4>;       /* 1.1 ms */
+        shunt-resistors = <4 8 8>;
+        avg-mode = <1>;
+        conv-time-bus = <2>;
+        conv-time-shunt = <4>;
         status = "okay";
     };
 
+    /* --- NEW: MCP9600 Thermocouple Amplifier --- */
+    mcp9600: mcp9600@60 {
+        compatible = "microchip,mcp9600";
+        reg = <0x60>;
+        status = "okay";
+        thermocouple-type = <0>;      /* Type K */
+        filter-coefficient = <3>;
+        /* alert-gpios = <&gpioX Y GPIO_ACTIVE_LOW>; */
+    };
 };
 
 &i2c1 {
@@ -108,15 +110,20 @@ icm42670: icm42670@68 {
     pinctrl-names = "default";
     clock-frequency = <I2C_BITRATE_STANDARD>;
 
-    /* Battery monitor (TI bq769x0 family) relocated to I2C1 */
     bq769x0: bq769x0@8 {
         compatible = "ti,bq769x0";
         reg = <0x08>;
-        /* ALERT pin from BMS IC to MCU GPIO (adjust to your wiring) */
-        alert-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>; /* ALERT rerouted to PD6 */
-        /* Precharge control (BQ76200 PCHG) connected to PD2 */
+        alert-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
         pchg-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
         status = "okay";
+    };
+
+    /* --- NEW: MCP4725 I2C DAC --- */
+    mcp4725: mcp4725@60 {
+        compatible = "microchip,mcp4725";
+        reg = <0x60>;
+        status = "okay";
+        power-down-mode = <0>;
     };
 };
 
@@ -141,9 +148,7 @@ icm42670: icm42670@68 {
 };
 
 #include <zephyr/dt-bindings/pwm/pwm.h>
-// #include <st/f7/stm32f745i(e-g)tx-pinctrl.dtsi>
-/* PWM Output timers - silkscreen label in comments */
-/* TIM2 no longer used for PWM on PB10/PB11 to avoid I2C2 conflict */
+
 &timers2 {
     status = "okay";
 };
@@ -155,12 +160,11 @@ icm42670: icm42670@68 {
         compatible = "st,stm32-pwm";
         status = "okay";
         #pwm-cells = <3>;
-        pinctrl-0 = <&tim4_ch4_pb9>; // PB9 (Servo P2) via TIM4_CH4
+        pinctrl-0 = <&tim4_ch4_pb9>;
         pinctrl-names = "default";
     };
 };
 
-/* PWM Input capture timers - silkscreen label in comments */
 &timers3 {
     status = "okay";
     st,prescaler = <107>;
@@ -168,7 +172,7 @@ icm42670: icm42670@68 {
         compatible = "st,stm32-pwm";
         status = "okay";
         #pwm-cells = <3>;
-        pinctrl-0 = <&tim3_ch2_pb5>; // PB5 (Diff front)
+        pinctrl-0 = <&tim3_ch2_pb5>;
         pinctrl-names = "default";
     };
 };
@@ -180,12 +184,11 @@ icm42670: icm42670@68 {
         compatible = "st,stm32-pwm";
         status = "okay";
         #pwm-cells = <3>;
-        pinctrl-0 = < &tim9_ch1_pe5 &tim9_ch2_pe6>; // PE5 (Servo P3) TIM9_CH1, PE6 (Servo P4) TIM9_CH2
+        pinctrl-0 = <&tim9_ch1_pe5 &tim9_ch2_pe6>;
         pinctrl-names = "default";
     };
 };
 
-/* TIM15 is not present on STM32F745; use TIM1 instead for rear diff (PE9 TIM1_CH1) */
 &timers1 {
     status = "okay";
     st,prescaler = <215>;
@@ -193,7 +196,7 @@ icm42670: icm42670@68 {
         compatible = "st,stm32-pwm";
         status = "okay";
         #pwm-cells = <3>;
-        pinctrl-0 = <&tim1_ch1_pe9 &tim1_ch4_pe14>; // PE9 (unused reserve), PE14 (Diff front)
+        pinctrl-0 = <&tim1_ch1_pe9 &tim1_ch4_pe14>;
         pinctrl-names = "default";
     };
 };
@@ -205,85 +208,79 @@ icm42670: icm42670@68 {
         compatible = "st,stm32-pwm";
         status = "okay";
         #pwm-cells = <3>;
-        pinctrl-0 = <&tim5_ch3_pa2>; // PA2 (Servo P5) via TIM5_CH3
+        pinctrl-0 = <&tim5_ch3_pa2>;
         pinctrl-names = "default";
     };
 };
 
-
 #include <zephyr/dt-bindings/timer/stm32-timer.h>
 
-
-/ {
-    /* Board-specific constants expected by BMS lib */
+ / {
     pcb {
         compatible = "bms";
-        /* Adjust these to your pack and shunt */
-        num-cells-max = <5>;              /* e.g. 3S-5S bq76920 */
-        num-thermistors-max = <0>;        /* set 0/1/2/3 matching your wiring */
-        current-max = <30>;               /* A, informational */
-        shunt-res = <4000>;               /* mOhm in milli (e.g. 4 mOhm => 4000) */
+        num-cells-max = <5>;
+        num-thermistors-max = <0>;
+        current-max = <30>;
+        shunt-res = <4000>;
         type = "Powerboard 3.0";
         version-str = "svea-v0.1";
         version-num = <1>;
     };
 
-    /* TS1 wake control GPIO for the BMS IC (used by wake_chip.c) */
     zephyr,user {
-        ts1_wake_gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>; /* adjust to your wiring */
-        /* MikroBUS RST pin selects the CS analog mux (keep host -> IMU path) */
-        imu_reset_gpios = <&gpioc 15 GPIO_ACTIVE_LOW>; /* mikroBUS1 RST */
-        soc_button_gpios = <&gpioe 10 GPIO_ACTIVE_LOW>; /* User BTN1 */
-        imu_calib_button_gpios = <&gpioe 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>; /* User BTN4 */
-        esc_en_gpios = <&gpiod 6 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_HIGH)>; /* PD6 to enable ESCs (active high) */
+        ts1_wake_gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+        imu_reset_gpios = <&gpioc 15 GPIO_ACTIVE_LOW>;
+        soc_button_gpios = <&gpioe 10 GPIO_ACTIVE_LOW>;
+        imu_calib_button_gpios = <&gpioe 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        esc_en_gpios = <&gpiod 6 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_HIGH)>;
         wheel_left_gpios = <&gpiob 2 GPIO_ACTIVE_HIGH>;
         wheel_right_gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
     };
 
-
     throttleesc: throttle_esc {
         compatible = "pwm-servo";
-        pwms = <&pwm9 2 10000000 PWM_POLARITY_NORMAL>; // throttle -> PE6 TIM9_CH2
+        pwms = <&pwm9 2 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
     };
 
-    // Servo output nodes - silkscreen label in comments
     steeringservo: servo {
         compatible = "pwm-servo";
-        pwms = <&pwm9 1 10000000 PWM_POLARITY_NORMAL>; // steer -> PE5 TIM9_CH1
+        pwms = <&pwm9 1 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
     };
+
     gearservo: gear_servo {
         compatible = "pwm-servo";
-        pwms = <&pwm4 4 10000000 PWM_POLARITY_NORMAL>; // speed -> PB9 TIM4_CH4
+        pwms = <&pwm4 4 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
     };
+
     diffservo: diff_servo {
         compatible = "pwm-servo";
-        pwms = <&pwm3 2 10000000 PWM_POLARITY_NORMAL>; // diff front -> PB5 TIM3_CH2
+        pwms = <&pwm3 2 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
     };
+
     diffservorear: diff_servo_rear {
         compatible = "pwm-servo";
         status = "okay";
-        pwms = <&pwm5 3 10000000 PWM_POLARITY_NORMAL>; // rear diff -> PA2 TIM5_CH3
+        pwms = <&pwm5 3 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
     };
 };
 
-/ {
+ / {
     chosen {
         zephyr,console = &usart3;
         zephyr,shell-uart = &usart3;
     };
 
     aliases {
-        /* RC PWM capture aliases removed: using SBUS on USART2 instead */
         imu = &ism330dlc;
         ina3221 = &ina3221;
         watchdog0 = &iwdg;
