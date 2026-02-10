@@ -25,6 +25,9 @@
         "kernel.h": "c",
         "util.h": "c",
         "ina3221_sensor.h": "c"
+        "mcp9600.h": "c"
+        "dac_mcp4725.h": "c"
+        "ina2xx_common.h": "c"
     },
     "terminal.integrated.defaultProfile.osx": "Zephyr IDE Terminal"
 }
