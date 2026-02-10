@@ -8,6 +8,8 @@
 #include "control.h"
 #include "imu_sensor.h"
 #include "ina3221_sensor.h"
+#include "mcp9600.h"
+#include "ina2xx_common.h"
 #include "rc_input.h"
 #include "ros_iface.h"
 #include "wheel_enc.h"
