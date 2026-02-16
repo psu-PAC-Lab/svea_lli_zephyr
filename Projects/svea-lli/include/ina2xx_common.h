@@ -11,7 +11,6 @@
 #include <stdint.h>
 
 #include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/sensor/ina2xx.h>
 #include <zephyr/sys/util_macro.h>
 
 /**
