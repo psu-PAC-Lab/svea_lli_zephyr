@@ -11,11 +11,30 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/sensor.h>
-#include <zephyr/drivers/sensor/mcp9600.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(MCP9600, CONFIG_SENSOR_LOG_LEVEL);
+
+/*
+ * Zephyr 4.1 does not ship a public mcp9600 sensor header.
+ * Define the driver-specific attributes locally.
+ */
+#ifndef SENSOR_ATTR_MCP9600_ADC_RES
+#define SENSOR_ATTR_MCP9600_ADC_RES (SENSOR_ATTR_PRIV_START + 0)
+#endif
+
+#ifndef SENSOR_ATTR_MCP9600_COLD_JUNCTION_RESOLUTION
+#define SENSOR_ATTR_MCP9600_COLD_JUNCTION_RESOLUTION (SENSOR_ATTR_PRIV_START + 1)
+#endif
+
+#ifndef SENSOR_ATTR_MCP9600_FILTER_COEFFICIENT
+#define SENSOR_ATTR_MCP9600_FILTER_COEFFICIENT (SENSOR_ATTR_PRIV_START + 2)
+#endif
+
+#ifndef SENSOR_ATTR_MCP9600_THERMOCOUPLE_TYPE
+#define SENSOR_ATTR_MCP9600_THERMOCOUPLE_TYPE (SENSOR_ATTR_PRIV_START + 3)
+#endif
 
 #define MCP9600_REG_TEMP_HOT 0x00
 
