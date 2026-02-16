@@ -42,7 +42,8 @@ extern rcl_publisher_t encoders_pub;
 extern rcl_publisher_t ina3221_pub;
 extern rcl_publisher_t mcp9600_pub;
 extern rcl_publisher_t mcp4725_pub;
-extern rcl_publisher_t ina238_pub;
+extern rcl_publisher_t ina238_aux_pub;
+extern rcl_publisher_t ina238_fan_pub;
 extern rcl_publisher_t battery_pub;
 
 // Non-blocking best-effort publish; returns RCL_RET_OK on success, RCL_RET_ERROR if skipped

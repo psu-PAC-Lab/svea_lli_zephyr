@@ -7,9 +7,11 @@
 
 #include "control.h"
 #include "imu_sensor.h"
+#include "ina238_sensor.h"
 #include "ina3221_sensor.h"
-#include "mcp9600.h"
 #include "ina2xx_common.h"
+#include "mcp4725_monitor.h"
+#include "mcp9600_sensor.h"
 #include "rc_input.h"
 #include "ros_iface.h"
 #include "wheel_enc.h"
@@ -64,7 +66,12 @@ int main(void) {
     if (ina3221_sensor_init() != 0) {
         LOG_WRN("INA3221 sensor init failed");
     }
+    if (ina238_sensor_init() != 0) {
+        LOG_WRN("INA238 sensor init failed");
+    }
     imu_sensor_start();
+    mcp9600_sensor_start();
+    mcp4725_monitor_start();
     wheel_enc_init();
 
     ros_iface_init();

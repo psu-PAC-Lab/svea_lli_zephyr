@@ -38,6 +38,9 @@ target_sources(app PRIVATE
     src/ros_iface.c
     src/imu_sensor.c
     src/ina3221_sensor.c
+    src/ina238_sensor.c
+    src/mcp9600_sensor.c
+    src/mcp4725_monitor.c
     src/wheel_enc.c
     src/ina2xx_common.c
     

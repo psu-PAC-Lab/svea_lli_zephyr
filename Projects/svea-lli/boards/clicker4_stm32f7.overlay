@@ -123,6 +123,23 @@
         status = "okay";
         #io-channel-cells = <1>;
     };
+
+    /* --- NEW: INA238 monitors (aux load + fan) --- */
+    ina238_aux: ina238_aux@40 {
+        compatible = "ti,ina237";
+        reg = <0x40>;
+        status = "okay";
+        current-lsb-microamps = <214>; /* ~7 A span */
+        rshunt-micro-ohms = <15000>;
+    };
+
+    ina238_fan: ina238_fan@41 {
+        compatible = "ti,ina237";
+        reg = <0x41>;
+        status = "okay";
+        current-lsb-microamps = <62>; /* ~2 A span */
+        rshunt-micro-ohms = <15000>;
+    };
 };
 
 &spi1 {
