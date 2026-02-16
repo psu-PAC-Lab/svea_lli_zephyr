@@ -39,9 +39,7 @@ target_sources(app PRIVATE
     src/imu_sensor.c
     src/ina3221_sensor.c
     src/wheel_enc.c
-    src/mcp9600.c
     src/ina2xx_common.c
-    src/dac_mcp4725.c
     
     # BMS integration
     src/bms.cpp

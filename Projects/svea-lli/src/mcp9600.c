@@ -36,6 +36,26 @@ LOG_MODULE_REGISTER(MCP9600, CONFIG_SENSOR_LOG_LEVEL);
 #define SENSOR_ATTR_MCP9600_THERMOCOUPLE_TYPE (SENSOR_ATTR_PRIV_START + 3)
 #endif
 
+#ifndef SENSOR_ATTR_MCP9600_DEV_ID
+#define SENSOR_ATTR_MCP9600_DEV_ID (SENSOR_ATTR_PRIV_START + 4)
+#endif
+
+#ifndef SENSOR_CHAN_MCP9600_HOT_JUNCTION_TEMP
+#define SENSOR_CHAN_MCP9600_HOT_JUNCTION_TEMP (SENSOR_CHAN_PRIV_START + 0)
+#endif
+
+#ifndef SENSOR_CHAN_MCP9600_COLD_JUNCTION_TEMP
+#define SENSOR_CHAN_MCP9600_COLD_JUNCTION_TEMP (SENSOR_CHAN_PRIV_START + 1)
+#endif
+
+#ifndef SENSOR_CHAN_MCP9600_DELTA_TEMP
+#define SENSOR_CHAN_MCP9600_DELTA_TEMP (SENSOR_CHAN_PRIV_START + 2)
+#endif
+
+#ifndef SENSOR_CHAN_MCP9600_RAW_ADC
+#define SENSOR_CHAN_MCP9600_RAW_ADC (SENSOR_CHAN_PRIV_START + 3)
+#endif
+
 #define MCP9600_REG_TEMP_HOT 0x00
 
 #define MCP9600_REG_TEMP_DELTA 0x01
@@ -415,10 +435,10 @@ static int mcp9600_init(const struct device *dev)
                                                                                                    \
 	static const struct mcp9600_config mcp9600_config_##id = {                                 \
 		.bus = I2C_DT_SPEC_INST_GET(id),                                                   \
-		.thermocouple_type = DT_INST_PROP(id, thermocouple_type),                          \
-		.filter_coefficient = DT_INST_PROP(id, filter_coefficient),                        \
-		.adc_resolution = DT_INST_PROP(id, adc_resolution),                                \
-		.cold_junction_temp_resolution = DT_INST_PROP(id, cold_junction_temp_resolution)}; \
+		.thermocouple_type = DT_INST_PROP_OR(id, thermocouple_type, 0),                     \
+		.filter_coefficient = DT_INST_PROP_OR(id, filter_coefficient, 0),                   \
+		.adc_resolution = DT_INST_PROP_OR(id, adc_resolution, 0),                           \
+		.cold_junction_temp_resolution = DT_INST_PROP_OR(id, cold_junction_temp_resolution, 0)}; \
                                                                                                    \
 	SENSOR_DEVICE_DT_INST_DEFINE(id, mcp9600_init, NULL, &mcp9600_data_##id,                   \
 				     &mcp9600_config_##id, POST_KERNEL,                            \
