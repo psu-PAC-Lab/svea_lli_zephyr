@@ -98,8 +98,6 @@
         compatible = "microchip,mcp9600";
         reg = <0x60>;
         status = "okay";
-        thermocouple-type = <0>;      /* Type K */
-        filter-coefficient = <3>;
         /* alert-gpios = <&gpioX Y GPIO_ACTIVE_LOW>; */
     };
 };
@@ -123,7 +121,7 @@
         compatible = "microchip,mcp4725";
         reg = <0x60>;
         status = "okay";
-        power-down-mode = <0>;
+        #io-channel-cells = <1>;
     };
 };
 
