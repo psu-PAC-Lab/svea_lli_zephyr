@@ -8,9 +8,8 @@
 #include "ros_iface.h"
 
 #include <math.h>
-#include <rosidl_runtime_c/primitives_sequence_functions.h>
-#include <std_msgs/msg/float32_multi_array.h>
-#include <string.h>
+#include <rosidl_runtime_c/string_functions.h>
+#include <sensor_msgs/msg/temperature.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
@@ -39,9 +38,8 @@ BUILD_ASSERT(DT_REG_ADDR(MCP9600_NODE) == 0x60, "MCP9600 must use default addres
 
 static K_THREAD_STACK_DEFINE(mcp9600_stack, MCP9600_THREAD_STACK_SIZE);
 static struct k_thread mcp9600_thread_data;
-static std_msgs__msg__Float32MultiArray mcp9600_msg;
+static sensor_msgs__msg__Temperature mcp9600_msg;
 static bool mcp9600_msg_ready;
-static uint32_t timestamp_anchor_ms32;
 
 static int mcp9600_msg_init(void)
 {
@@ -49,18 +47,19 @@ static int mcp9600_msg_init(void)
         return 0;
     }
 
-    if (!std_msgs__msg__Float32MultiArray__init(&mcp9600_msg)) {
+    if (!sensor_msgs__msg__Temperature__init(&mcp9600_msg)) {
         LOG_ERR("Failed to init MCP9600 message");
         return -ENOMEM;
     }
 
-    if (!rosidl_runtime_c__float32__Sequence__init(&mcp9600_msg.data, 2)) {
-        LOG_ERR("Failed to init MCP9600 data sequence");
-        std_msgs__msg__Float32MultiArray__fini(&mcp9600_msg);
+    if (!rosidl_runtime_c__String__assign(&mcp9600_msg.header.frame_id, "mcp9600_hot")) {
+        sensor_msgs__msg__Temperature__fini(&mcp9600_msg);
+        LOG_ERR("Failed to set MCP9600 frame id");
         return -ENOMEM;
     }
 
-    memset(mcp9600_msg.data.data, 0, sizeof(float) * mcp9600_msg.data.size);
+    mcp9600_msg.temperature = NAN;
+    mcp9600_msg.variance = NAN;
     mcp9600_msg_ready = true;
     return 0;
 }
@@ -142,14 +141,11 @@ static void mcp9600_thread(void *a, void *b, void *c)
         }
 #endif
 
-        uint32_t now_ms32 = k_uptime_get_32();
-        if (timestamp_anchor_ms32 == 0U) {
-            timestamp_anchor_ms32 = now_ms32;
-        }
-        float timestamp_s = (float)(now_ms32 - timestamp_anchor_ms32) / 1000.0f;
-
-        mcp9600_msg.data.data[0] = timestamp_s;
-        mcp9600_msg.data.data[1] = hot_c;
+        uint64_t now_ms = ros_iface_epoch_millis();
+        uint64_t now_ns = ros_iface_epoch_nanos();
+        mcp9600_msg.header.stamp.sec = (int32_t)(now_ms / 1000ULL);
+        mcp9600_msg.header.stamp.nanosec = (uint32_t)(now_ns % 1000000000ULL);
+        mcp9600_msg.temperature = hot_valid ? hot_c : NAN;
 
         if (hot_valid &&
             (isnan(last_logged_temp) || fabsf(hot_c - last_logged_temp) > 5.0f)) {

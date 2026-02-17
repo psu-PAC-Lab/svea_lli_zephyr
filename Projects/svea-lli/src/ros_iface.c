@@ -15,6 +15,7 @@
 #include <rclc/executor.h>
 #include <rclc/rclc.h>
 #include <sensor_msgs/msg/battery_state.h>
+#include <sensor_msgs/msg/temperature.h>
 #include <std_msgs/msg/bool.h>
 #include <std_msgs/msg/u_int8.h>
 #include <zephyr/device.h>
@@ -171,7 +172,7 @@ bool create_entities() {
     RCCHECK(rclc_publisher_init_best_effort(&encoders_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, TwistWithCovarianceStamped), "/lli/sensor/encoders"));
     RCCHECK(rclc_publisher_init_best_effort(&ina3221_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina3221"));
     RCCHECK(rclc_publisher_init_best_effort(&battery_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, BatteryState), "/lli/battery/state"));
-    RCCHECK(rclc_publisher_init_best_effort(&mcp9600_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/mcp9600"));
+    RCCHECK(rclc_publisher_init_best_effort(&mcp9600_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Temperature), "/lli/sensor/mcp9600"));
     RCCHECK(rclc_publisher_init_best_effort(&mcp4725_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/mcp4725"));
     RCCHECK(rclc_publisher_init_best_effort(&ina238_aux_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina238_aux"));
     RCCHECK(rclc_publisher_init_best_effort(&ina238_fan_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina238_fan"));
