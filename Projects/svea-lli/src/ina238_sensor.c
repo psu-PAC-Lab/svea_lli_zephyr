@@ -20,7 +20,7 @@ LOG_MODULE_REGISTER(ina238_sensor, LOG_LEVEL_INF);
 
 #define INA238_THREAD_STACK_SIZE 2048
 #define INA238_THREAD_PRIORITY   6
-#define INA238_PUBLISH_PERIOD_MS 250
+#define INA238_PUBLISH_PERIOD_MS 40  // Target ~25 Hz while keeping bus utilization reasonable
 
 struct ina238_sensor_ctx {
     const struct device *dev;
