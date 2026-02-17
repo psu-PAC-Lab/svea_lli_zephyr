@@ -135,7 +135,7 @@ static void mcp9600_thread(void *a, void *b, void *c)
             int fetch_rc = sensor_sample_fetch(mcp9600_dev);
             if (fetch_rc == 0) {
                 struct sensor_value hot_sv;
-                if (sensor_channel_get(mcp9600_dev, SENSOR_CHAN_MCP9600_HOT_JUNCTION_TEMP,
+                if (sensor_channel_get(mcp9600_dev, SENSOR_CHAN_AMBIENT_TEMP,
                                        &hot_sv) == 0) {
                     hot_c = (float)sensor_value_to_double(&hot_sv);
                     hot_valid = true;
