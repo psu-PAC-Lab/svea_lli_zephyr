@@ -13,6 +13,7 @@
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/kernel.h>
@@ -24,10 +25,13 @@ LOG_MODULE_REGISTER(mcp9600_sensor, LOG_LEVEL_INF);
 #define MCP9600_THREAD_PRIORITY   6
 #define MCP9600_PUBLISH_PERIOD_MS 200
 
+#define MCP9600_REG_TEMP_HOT 0x00
+
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(mcp9600), okay)
 #define MCP9600_HAS_NODE 1
 #define MCP9600_NODE DT_NODELABEL(mcp9600)
 static const struct device *const mcp9600_dev = DEVICE_DT_GET(MCP9600_NODE);
+static const struct i2c_dt_spec mcp9600_bus = I2C_DT_SPEC_GET(MCP9600_NODE);
 BUILD_ASSERT(DT_REG_ADDR(MCP9600_NODE) == 0x60, "MCP9600 must use default address 0x60");
 #else
 #define MCP9600_HAS_NODE 0
@@ -37,7 +41,7 @@ static K_THREAD_STACK_DEFINE(mcp9600_stack, MCP9600_THREAD_STACK_SIZE);
 static struct k_thread mcp9600_thread_data;
 static std_msgs__msg__Float32MultiArray mcp9600_msg;
 static bool mcp9600_msg_ready;
-static uint64_t timestamp_anchor_ms;
+static uint32_t timestamp_anchor_ms32;
 
 static int mcp9600_msg_init(void)
 {
@@ -61,6 +65,28 @@ static int mcp9600_msg_init(void)
     return 0;
 }
 
+static int mcp9600_read_hot_direct(float *value)
+{
+#if MCP9600_HAS_NODE
+    if (!device_is_ready(mcp9600_bus.bus)) {
+        return -ENODEV;
+    }
+
+    uint8_t buf[2];
+    int ret = i2c_burst_read_dt(&mcp9600_bus, MCP9600_REG_TEMP_HOT, buf, sizeof(buf));
+    if (ret < 0) {
+        return ret;
+    }
+
+    int16_t raw = (int16_t)((buf[0] << 8) | buf[1]);
+    *value = (float)raw * 0.0625f;
+    return 0;
+#else
+    ARG_UNUSED(value);
+    return -ENODEV;
+#endif
+}
+
 static void mcp9600_thread(void *a, void *b, void *c)
 {
     ARG_UNUSED(a);
@@ -75,11 +101,11 @@ static void mcp9600_thread(void *a, void *b, void *c)
     float last_logged_temp = NAN;
 
 #if MCP9600_HAS_NODE
-    const struct device *const mcp9600_bus = DEVICE_DT_GET(DT_BUS(MCP9600_NODE));
+    const struct device *const mcp9600_bus_dev = DEVICE_DT_GET(DT_BUS(MCP9600_NODE));
     if (!device_is_ready(mcp9600_dev)) {
         LOG_WRN("MCP9600 device %s not ready; publishing fallback values", mcp9600_dev->name);
     } else {
-        LOG_INF("MCP9600 using I2C bus %s at address 0x%02x", mcp9600_bus->name,
+        LOG_INF("MCP9600 using I2C bus %s at address 0x%02x", mcp9600_bus_dev->name,
             (unsigned int)DT_REG_ADDR(MCP9600_NODE));
     }
 #else
@@ -88,33 +114,45 @@ static void mcp9600_thread(void *a, void *b, void *c)
 
     while (true) {
         float hot_c = NAN;
+        bool hot_valid = false;
 
 #if MCP9600_HAS_NODE
         if (device_is_ready(mcp9600_dev)) {
-            if (sensor_sample_fetch(mcp9600_dev) == 0) {
+            int fetch_rc = sensor_sample_fetch(mcp9600_dev);
+            if (fetch_rc == 0) {
                 struct sensor_value hot_sv;
                 if (sensor_channel_get(mcp9600_dev, SENSOR_CHAN_MCP9600_HOT_JUNCTION_TEMP,
                                        &hot_sv) == 0) {
                     hot_c = (float)sensor_value_to_double(&hot_sv);
+                    hot_valid = true;
                 } else {
                     LOG_DBG("Failed to read MCP9600 hot junction channel");
                 }
             } else {
-                LOG_DBG("Failed to fetch MCP9600 sample");
+                LOG_DBG("Failed to fetch MCP9600 sample (%d)", fetch_rc);
+            }
+        }
+
+        if (!hot_valid) {
+            if (mcp9600_read_hot_direct(&hot_c) == 0) {
+                hot_valid = true;
+            } else {
+                LOG_DBG("Falling back direct read failed");
             }
         }
 #endif
 
-        uint64_t now_ms = ros_iface_epoch_millis();
-        if (timestamp_anchor_ms == 0ULL) {
-            timestamp_anchor_ms = now_ms;
+        uint32_t now_ms32 = k_uptime_get_32();
+        if (timestamp_anchor_ms32 == 0U) {
+            timestamp_anchor_ms32 = now_ms32;
         }
-        float timestamp_s = (float)((now_ms - timestamp_anchor_ms) / 1000.0);
+        float timestamp_s = (float)(now_ms32 - timestamp_anchor_ms32) / 1000.0f;
 
         mcp9600_msg.data.data[0] = timestamp_s;
         mcp9600_msg.data.data[1] = hot_c;
 
-        if (!isnan(hot_c) && (isnan(last_logged_temp) || fabsf(hot_c - last_logged_temp) > 5.0f)) {
+        if (hot_valid &&
+            (isnan(last_logged_temp) || fabsf(hot_c - last_logged_temp) > 5.0f)) {
             LOG_INF("MCP9600 hot junction temperature %.2f C", hot_c);
             last_logged_temp = hot_c;
         }
