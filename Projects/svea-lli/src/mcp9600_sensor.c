@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(mcp9600_sensor, LOG_LEVEL_INF);
 #define MCP9600_PUBLISH_PERIOD_MS 200
 
 #define MCP9600_REG_TEMP_HOT 0x00
+#define MCP9600_REG_ID_REVISION 0x20
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(mcp9600), okay)
 #define MCP9600_HAS_NODE 1
@@ -62,6 +63,19 @@ static int mcp9600_msg_init(void)
     mcp9600_msg.variance = NAN;
     mcp9600_msg_ready = true;
     return 0;
+}
+
+static void mcp9600_log_device_id(void)
+{
+#if MCP9600_HAS_NODE
+    uint8_t buf[2];
+    int ret = i2c_burst_read_dt(&mcp9600_bus, MCP9600_REG_ID_REVISION, buf, sizeof(buf));
+    if (ret == 0) {
+        LOG_INF("MCP9600 device id 0x%02x rev 0x%02x", buf[0], buf[1]);
+    } else {
+        LOG_WRN("MCP9600: failed to read device id (%d)", ret);
+    }
+#endif
 }
 
 static int mcp9600_read_hot_direct(float *value)
@@ -106,6 +120,7 @@ static void mcp9600_thread(void *a, void *b, void *c)
     } else {
         LOG_INF("MCP9600 using I2C bus %s at address 0x%02x", mcp9600_bus_dev->name,
             (unsigned int)DT_REG_ADDR(MCP9600_NODE));
+        mcp9600_log_device_id();
     }
 #else
     LOG_WRN("No MCP9600 node defined; publishing NaN values");
@@ -125,18 +140,19 @@ static void mcp9600_thread(void *a, void *b, void *c)
                     hot_c = (float)sensor_value_to_double(&hot_sv);
                     hot_valid = true;
                 } else {
-                    LOG_DBG("Failed to read MCP9600 hot junction channel");
+                    LOG_WRN("MCP9600: sensor_channel_get failed");
                 }
             } else {
-                LOG_DBG("Failed to fetch MCP9600 sample (%d)", fetch_rc);
+                LOG_WRN("MCP9600: sensor_sample_fetch failed (%d)", fetch_rc);
             }
         }
 
         if (!hot_valid) {
-            if (mcp9600_read_hot_direct(&hot_c) == 0) {
+            int direct_rc = mcp9600_read_hot_direct(&hot_c);
+            if (direct_rc == 0) {
                 hot_valid = true;
             } else {
-                LOG_DBG("Falling back direct read failed");
+                LOG_WRN("MCP9600: direct register read failed (%d)", direct_rc);
             }
         }
 #endif
