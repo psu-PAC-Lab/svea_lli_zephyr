@@ -7,13 +7,13 @@
 #include "mcp9600.h"
 #include "ros_iface.h"
 
+#include <limits.h>
 #include <math.h>
 #include <rosidl_runtime_c/string_functions.h>
 #include <sensor_msgs/msg/temperature.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/sensor.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -30,9 +30,66 @@ LOG_MODULE_REGISTER(mcp9600_sensor, LOG_LEVEL_INF);
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(mcp9600), okay)
 #define MCP9600_HAS_NODE 1
 #define MCP9600_NODE DT_NODELABEL(mcp9600)
-static const struct device *const mcp9600_dev = DEVICE_DT_GET(MCP9600_NODE);
 static const struct i2c_dt_spec mcp9600_bus = I2C_DT_SPEC_GET(MCP9600_NODE);
-BUILD_ASSERT(DT_REG_ADDR(MCP9600_NODE) == 0x60, "MCP9600 must use default address 0x60");
+static uint16_t mcp9600_i2c_addr = DT_REG_ADDR(MCP9600_NODE);
+static uint8_t mcp9600_failures;
+static int64_t mcp9600_last_scan_ms;
+
+static int mcp9600_i2c_read_addr(uint16_t addr, uint8_t reg, uint8_t *buf, size_t len);
+static bool mcp9600_scan_alternate_addresses(void);
+
+static void mcp9600_track_i2c_result(int err)
+{
+    if (err == 0) {
+        mcp9600_failures = 0;
+        return;
+    }
+
+    if (mcp9600_failures < UINT8_MAX) {
+        ++mcp9600_failures;
+    }
+
+    if (mcp9600_failures >= 5) {
+        (void)mcp9600_scan_alternate_addresses();
+        mcp9600_failures = 0;
+    }
+}
+
+static int mcp9600_i2c_read_addr(uint16_t addr, uint8_t reg, uint8_t *buf, size_t len)
+{
+    if (!device_is_ready(mcp9600_bus.bus)) {
+        return -ENODEV;
+    }
+
+    return i2c_write_read(mcp9600_bus.bus, addr, &reg, sizeof(reg), buf, len);
+}
+
+static bool mcp9600_scan_alternate_addresses(void)
+{
+    static const uint8_t candidates[] = {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67};
+    int64_t now = k_uptime_get();
+
+    if ((now - mcp9600_last_scan_ms) < 5000) {
+        return false;
+    }
+    mcp9600_last_scan_ms = now;
+
+    for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
+        uint8_t id[2];
+        uint8_t addr = candidates[i];
+        int rc = mcp9600_i2c_read_addr(addr, MCP9600_REG_ID_REVISION, id, sizeof(id));
+        if (rc == 0) {
+            if (mcp9600_i2c_addr != addr) {
+                LOG_INF("MCP9600 responding at 0x%02x (device id 0x%02x rev 0x%02x)", addr, id[0], id[1]);
+                mcp9600_i2c_addr = addr;
+            }
+            return true;
+        }
+    }
+
+    LOG_WRN("MCP9600 scan failed to locate a responding device");
+    return false;
+}
 #else
 #define MCP9600_HAS_NODE 0
 #endif
@@ -69,9 +126,10 @@ static void mcp9600_log_device_id(void)
 {
 #if MCP9600_HAS_NODE
     uint8_t buf[2];
-    int ret = i2c_burst_read_dt(&mcp9600_bus, MCP9600_REG_ID_REVISION, buf, sizeof(buf));
+    int ret = mcp9600_i2c_read_addr(mcp9600_i2c_addr, MCP9600_REG_ID_REVISION, buf, sizeof(buf));
+    mcp9600_track_i2c_result(ret);
     if (ret == 0) {
-        LOG_INF("MCP9600 device id 0x%02x rev 0x%02x", buf[0], buf[1]);
+        LOG_INF("MCP9600(0x%02x) device id 0x%02x rev 0x%02x", mcp9600_i2c_addr, buf[0], buf[1]);
     } else {
         LOG_WRN("MCP9600: failed to read device id (%d)", ret);
     }
@@ -81,18 +139,16 @@ static void mcp9600_log_device_id(void)
 static int mcp9600_read_hot_direct(float *value)
 {
 #if MCP9600_HAS_NODE
-    if (!device_is_ready(mcp9600_bus.bus)) {
-        return -ENODEV;
-    }
-
     uint8_t buf[2];
-    int ret = i2c_burst_read_dt(&mcp9600_bus, MCP9600_REG_TEMP_HOT, buf, sizeof(buf));
+    int ret = mcp9600_i2c_read_addr(mcp9600_i2c_addr, MCP9600_REG_TEMP_HOT, buf, sizeof(buf));
     if (ret < 0) {
+        mcp9600_track_i2c_result(ret);
         return ret;
     }
 
     int16_t raw = (int16_t)((buf[0] << 8) | buf[1]);
     *value = (float)raw * 0.0625f;
+    mcp9600_track_i2c_result(0);
     return 0;
 #else
     ARG_UNUSED(value);
@@ -115,11 +171,11 @@ static void mcp9600_thread(void *a, void *b, void *c)
 
 #if MCP9600_HAS_NODE
     const struct device *const mcp9600_bus_dev = DEVICE_DT_GET(DT_BUS(MCP9600_NODE));
-    if (!device_is_ready(mcp9600_dev)) {
-        LOG_WRN("MCP9600 device %s not ready; publishing fallback values", mcp9600_dev->name);
+    if (!device_is_ready(mcp9600_bus_dev)) {
+        LOG_WRN("MCP9600 bus %s not ready; publishing fallback values", mcp9600_bus_dev->name);
     } else {
         LOG_INF("MCP9600 using I2C bus %s at address 0x%02x", mcp9600_bus_dev->name,
-            (unsigned int)DT_REG_ADDR(MCP9600_NODE));
+            (unsigned int)mcp9600_i2c_addr);
         mcp9600_log_device_id();
     }
 #else
@@ -129,31 +185,16 @@ static void mcp9600_thread(void *a, void *b, void *c)
     while (true) {
         float hot_c = NAN;
         bool hot_valid = false;
+        static int last_direct_err;
 
 #if MCP9600_HAS_NODE
-        if (device_is_ready(mcp9600_dev)) {
-            int fetch_rc = sensor_sample_fetch(mcp9600_dev);
-            if (fetch_rc == 0) {
-                struct sensor_value hot_sv;
-                if (sensor_channel_get(mcp9600_dev, SENSOR_CHAN_AMBIENT_TEMP,
-                                       &hot_sv) == 0) {
-                    hot_c = (float)sensor_value_to_double(&hot_sv);
-                    hot_valid = true;
-                } else {
-                    LOG_WRN("MCP9600: sensor_channel_get failed");
-                }
-            } else {
-                LOG_WRN("MCP9600: sensor_sample_fetch failed (%d)", fetch_rc);
-            }
-        }
-
-        if (!hot_valid) {
-            int direct_rc = mcp9600_read_hot_direct(&hot_c);
-            if (direct_rc == 0) {
-                hot_valid = true;
-            } else {
-                LOG_WRN("MCP9600: direct register read failed (%d)", direct_rc);
-            }
+        int direct_rc = mcp9600_read_hot_direct(&hot_c);
+        if (direct_rc == 0) {
+            hot_valid = true;
+            last_direct_err = 0;
+        } else if (direct_rc != last_direct_err) {
+            LOG_WRN("MCP9600: direct register read failed (%d)", direct_rc);
+            last_direct_err = direct_rc;
         }
 #endif
 

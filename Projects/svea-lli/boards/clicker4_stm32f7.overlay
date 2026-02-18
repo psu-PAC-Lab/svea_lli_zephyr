@@ -1,16 +1,27 @@
+/ {
+    chosen {
+        zephyr,console = &usart1;
+        zephyr,shell-uart = &usart1;
+    };
+
+    aliases {
+        imu = &ism330dlc;
+        ina3221 = &ina3221;
+        watchdog0 = &iwdg;
+    };
+};
+
 &cdc_acm_uart0 { // For mikroros
     current-speed = <1000000>;
 };
 
 &usart1 {
-    status = "disabled";
+    status = "okay";
+    current-speed = <1000000>;
 };
 
 &usart3 {
-    status = "okay";
-    pinctrl-0 = <&usart3_tx_pd8 &usart3_rx_pd9>;
-    pinctrl-names = "default";
-    current-speed = <1000000>;
+    status = "disabled";
 };
 
 /* For input event codes used by futaba,sbus */
@@ -286,18 +297,5 @@
         pwms = <&pwm5 3 10000000 PWM_POLARITY_NORMAL>;
         min-pulse = <PWM_USEC(1000)>;
         max-pulse = <PWM_USEC(2100)>;
-    };
-};
-
- / {
-    chosen {
-        zephyr,console = &usart3;
-        zephyr,shell-uart = &usart3;
-    };
-
-    aliases {
-        imu = &ism330dlc;
-        ina3221 = &ina3221;
-        watchdog0 = &iwdg;
     };
 };
