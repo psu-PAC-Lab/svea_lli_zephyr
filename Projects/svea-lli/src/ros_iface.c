@@ -8,7 +8,9 @@
 #include "ros_iface.h"
 #include "control.h"
 #include "loop_delays.h"
+#include "mcp4725_monitor.h"
 #include "rc_input.h"
+#include <math.h>
 #include <geometry_msgs/msg/twist.h>
 #include <geometry_msgs/msg/twist_with_covariance_stamped.h>
 #include <rcl/rcl.h>
@@ -17,11 +19,10 @@
 #include <sensor_msgs/msg/battery_state.h>
 #include <sensor_msgs/msg/temperature.h>
 #include <std_msgs/msg/bool.h>
+#include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/u_int8.h>
-#include <std_msgs/msg/u_int16.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -81,7 +82,7 @@ static std_msgs__msg__Int8 submsg_steer __aligned(4);
 static std_msgs__msg__Int8 submsg_throttle __aligned(4);
 static std_msgs__msg__Bool submsg_gear __aligned(4);
 static std_msgs__msg__Bool submsg_diff __aligned(4);
-static std_msgs__msg__UInt16 submsg_mcp4725_cmd __aligned(4);
+static std_msgs__msg__Float32 submsg_mcp4725_cmd __aligned(4);
 
 // Time synchronization variables
 static uint64_t epoch_off_ns;
@@ -137,33 +138,15 @@ static void diff_cb(const void *msg) {
 }
 
 static void mcp4725_cmd_cb(const void *msg) {
-    uint16_t dac_value = ((std_msgs__msg__UInt16 *)msg)->data;
-    
-    // Clamp value to valid 12-bit range (0-4095)
-    if (dac_value > 4095) {
-        LOG_WRN("MCP4725 command %u exceeds max 12-bit value (4095), clamping", dac_value);
-        dac_value = 4095;
-    }
-    
-#if LOG_LEVEL >= LOG_LEVEL_DBG
-    LOG_DBG("Received MCP4725 DAC command: %u", dac_value);
-#endif
-    
-    // Write to MCP4725 DAC
-    const struct device *dac_dev = DEVICE_DT_GET(DT_NODELABEL(mcp4725));
-    if (dac_dev == NULL) {
-        LOG_WRN("MCP4725 DAC device not found");
+    float normalized = ((const std_msgs__msg__Float32 *)msg)->data;
+
+    if (!isfinite(normalized)) {
+        LOG_WRN("Ignored MCP4725 command (non-finite value)");
         return;
     }
-    
-    if (!device_is_ready(dac_dev)) {
-        LOG_WRN("MCP4725 DAC device not ready");
-        return;
-    }
-    
-    int ret = dac_write_value(dac_dev, 0, dac_value);
-    if (ret != 0) {
-        LOG_ERR("Failed to write MCP4725 DAC value %u: error %d", dac_value, ret);
+
+    if (mcp4725_set_target(normalized) != 0) {
+        LOG_WRN("Failed to schedule MCP4725 command");
     }
 }
 
@@ -217,7 +200,7 @@ bool create_entities() {
     RCCHECK(rclc_subscription_init_best_effort(&sub_throttle, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/lli/ctrl/throttle"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_gear, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/high_gear"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_diff, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/diff"));
-    RCCHECK(rclc_subscription_init_best_effort(&sub_mcp4725_cmd, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16), "/lli/cmd/mcp4725"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_mcp4725_cmd, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "/lli/cmd/mcp4725"));
 
     // Executor
     RCCHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));

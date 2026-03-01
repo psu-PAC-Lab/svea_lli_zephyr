@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 void mcp4725_monitor_start(void);
+int mcp4725_set_target(float normalized);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,7 @@
 
 #include "ros_iface.h"
 
+#include <errno.h>
 #include <math.h>
 #include <rosidl_runtime_c/primitives_sequence_functions.h>
 #include <std_msgs/msg/float32_multi_array.h>
@@ -35,6 +36,79 @@ static K_THREAD_STACK_DEFINE(mcp4725_stack, MCP4725_THREAD_STACK_SIZE);
 static struct k_thread mcp4725_thread_data;
 static std_msgs__msg__Float32MultiArray mcp4725_msg;
 static bool mcp4725_msg_ready;
+
+#define MCP4725_MAX_RAW_VALUE 4095U
+
+struct mcp4725_command_state {
+    struct k_mutex lock;
+    bool pending;
+    uint16_t raw_value;
+};
+
+static struct mcp4725_command_state mcp4725_cmd_state;
+
+static uint16_t mcp4725_normalized_to_raw(float normalized)
+{
+    if (!isfinite(normalized)) {
+        return 0U;
+    }
+
+    if (normalized <= 0.0f) {
+        return 0U;
+    }
+
+    if (normalized >= 1.0f) {
+        return MCP4725_MAX_RAW_VALUE;
+    }
+
+    return (uint16_t)lrintf(normalized * (float)MCP4725_MAX_RAW_VALUE);
+}
+
+static int mcp4725_write_raw(uint16_t raw)
+{
+#if MCP4725_HAS_NODE
+    uint8_t tx[2];
+
+    tx[0] = (raw >> 8) & 0x0F;
+    tx[1] = raw & 0xFF;
+
+    return i2c_write_dt(&mcp4725_bus, tx, sizeof(tx));
+#else
+    ARG_UNUSED(raw);
+    return -ENODEV;
+#endif
+}
+
+static bool mcp4725_consume_pending_command(uint16_t *raw_out)
+{
+    bool has_command = false;
+
+    k_mutex_lock(&mcp4725_cmd_state.lock, K_FOREVER);
+    if (mcp4725_cmd_state.pending) {
+        has_command = true;
+        mcp4725_cmd_state.pending = false;
+        *raw_out = mcp4725_cmd_state.raw_value;
+    }
+    k_mutex_unlock(&mcp4725_cmd_state.lock);
+
+    return has_command;
+}
+
+int mcp4725_set_target(float normalized)
+{
+    if (!isfinite(normalized)) {
+        return -EINVAL;
+    }
+
+    uint16_t raw = mcp4725_normalized_to_raw(normalized);
+
+    k_mutex_lock(&mcp4725_cmd_state.lock, K_FOREVER);
+    mcp4725_cmd_state.raw_value = raw;
+    mcp4725_cmd_state.pending = true;
+    k_mutex_unlock(&mcp4725_cmd_state.lock);
+
+    return 0;
+}
 
 static int mcp4725_msg_init(void)
 {
@@ -102,6 +176,13 @@ static void mcp4725_thread(void *a, void *b, void *c)
         bool ready = false;
 #if MCP4725_HAS_NODE
         if (device_is_ready(mcp4725_bus.bus)) {
+            uint16_t command_raw = 0;
+            if (mcp4725_consume_pending_command(&command_raw)) {
+                int write_rc = mcp4725_write_raw(command_raw);
+                if (write_rc < 0) {
+                    LOG_WRN("Failed to command MCP4725 value (%d)", write_rc);
+                }
+            }
             if (mcp4725_snapshot(&raw, &ready) < 0) {
                 LOG_DBG("Failed to read MCP4725 snapshot");
             }
@@ -121,6 +202,7 @@ static void mcp4725_thread(void *a, void *b, void *c)
 
 void mcp4725_monitor_start(void)
 {
+    k_mutex_init(&mcp4725_cmd_state.lock);
     k_thread_create(&mcp4725_thread_data, mcp4725_stack, MCP4725_THREAD_STACK_SIZE,
                     mcp4725_thread, NULL, NULL, NULL,
                     MCP4725_THREAD_PRIORITY, 0, K_NO_WAIT);
