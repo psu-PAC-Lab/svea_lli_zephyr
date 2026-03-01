@@ -18,8 +18,10 @@
 #include <sensor_msgs/msg/temperature.h>
 #include <std_msgs/msg/bool.h>
 #include <std_msgs/msg/u_int8.h>
+#include <std_msgs/msg/u_int16.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/dac.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -74,11 +76,12 @@ rcl_publisher_t pub_remote_steer, pub_remote_throttle, pub_remote_gear, pub_remo
 rcl_publisher_t imu_pub, encoders_pub, ina3221_pub, battery_pub, mcp9600_pub, mcp4725_pub, ina238_aux_pub, ina238_fan_pub, ina2xx_common_pub;
 
 // Subscriptions - ensure proper alignment
-static rcl_subscription_t sub_steer, sub_throttle, sub_gear, sub_diff;
+static rcl_subscription_t sub_steer, sub_throttle, sub_gear, sub_diff, sub_mcp4725_cmd;
 static std_msgs__msg__Int8 submsg_steer __aligned(4);
 static std_msgs__msg__Int8 submsg_throttle __aligned(4);
 static std_msgs__msg__Bool submsg_gear __aligned(4);
 static std_msgs__msg__Bool submsg_diff __aligned(4);
+static std_msgs__msg__UInt16 submsg_mcp4725_cmd __aligned(4);
 
 // Time synchronization variables
 static uint64_t epoch_off_ns;
@@ -133,6 +136,37 @@ static void diff_cb(const void *msg) {
     g_ros_ctrl.diff = value;
 }
 
+static void mcp4725_cmd_cb(const void *msg) {
+    uint16_t dac_value = ((std_msgs__msg__UInt16 *)msg)->data;
+    
+    // Clamp value to valid 12-bit range (0-4095)
+    if (dac_value > 4095) {
+        LOG_WRN("MCP4725 command %u exceeds max 12-bit value (4095), clamping", dac_value);
+        dac_value = 4095;
+    }
+    
+#if LOG_LEVEL >= LOG_LEVEL_DBG
+    LOG_DBG("Received MCP4725 DAC command: %u", dac_value);
+#endif
+    
+    // Write to MCP4725 DAC
+    const struct device *dac_dev = DEVICE_DT_GET(DT_NODELABEL(mcp4725));
+    if (dac_dev == NULL) {
+        LOG_WRN("MCP4725 DAC device not found");
+        return;
+    }
+    
+    if (!device_is_ready(dac_dev)) {
+        LOG_WRN("MCP4725 DAC device not ready");
+        return;
+    }
+    
+    int ret = dac_write_value(dac_dev, 0, dac_value);
+    if (ret != 0) {
+        LOG_ERR("Failed to write MCP4725 DAC value %u: error %d", dac_value, ret);
+    }
+}
+
 // Create allocator, support, pub, sub, executor for node if agent connection is successful
 bool create_entities() {
     allocator = rcl_get_default_allocator();
@@ -183,13 +217,15 @@ bool create_entities() {
     RCCHECK(rclc_subscription_init_best_effort(&sub_throttle, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/lli/ctrl/throttle"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_gear, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/high_gear"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_diff, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/diff"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_mcp4725_cmd, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16), "/lli/cmd/mcp4725"));
 
     // Executor
-    RCCHECK(rclc_executor_init(&executor, &support.context, 4, &allocator));
+    RCCHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_steer, &submsg_steer, steer_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_throttle, &submsg_throttle, throttle_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_gear, &submsg_gear, gear_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_diff, &submsg_diff, diff_cb, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &sub_mcp4725_cmd, &submsg_mcp4725_cmd, mcp4725_cmd_cb, ON_NEW_DATA));
 
     return true;
 }
@@ -218,6 +254,7 @@ bool destroy_entities() {
     RCSOFTCHECK(rcl_subscription_fini(&sub_throttle, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_gear, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_diff, &node));
+    RCSOFTCHECK(rcl_subscription_fini(&sub_mcp4725_cmd, &node));
     RCSOFTCHECK(rclc_executor_fini(&executor));
     RCSOFTCHECK(rcl_node_fini(&node));
     RCSOFTCHECK(rclc_support_fini(&support));
