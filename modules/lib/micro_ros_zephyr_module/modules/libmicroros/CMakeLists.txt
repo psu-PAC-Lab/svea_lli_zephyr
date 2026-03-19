@@ -3,6 +3,8 @@
 if(CONFIG_MICROROS)
 
 set(MICROROS_DIR ${ZEPHYR_CURRENT_MODULE_DIR})
+set(MICROROS_LIB ${MICROROS_DIR}/libmicroros.a)
+file(RELATIVE_PATH MICROROS_LIB_REL_FROM_PROJECT_BUILD ${PROJECT_BINARY_DIR} ${MICROROS_LIB})
 
 if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
 set(submake "$(MAKE)")
@@ -45,14 +47,15 @@ externalproject_add(libmicroros_project
             X_AR=${CMAKE_AR}
             X_RANLIB=${CMAKE_RANLIB}
             X_CXX=${CMAKE_CXX_COMPILER}
+            X_SYSROOT=${CMAKE_SYSROOT}
             COMPONENT_PATH=${MICROROS_DIR}
             ZEPHYR_BASE=${ZEPHYR_BASE}
             PROJECT_BINARY_DIR=${PROJECT_BINARY_DIR}
     INSTALL_COMMAND ""
-    BUILD_BYPRODUCTS ${MICROROS_DIR}/libmicroros.a
+    BUILD_BYPRODUCTS ${MICROROS_LIB_REL_FROM_PROJECT_BUILD}
     )
 
-zephyr_link_libraries(${MICROROS_DIR}/libmicroros.a)
+zephyr_link_libraries(${MICROROS_LIB})
 
 zephyr_interface_library_named(microros)
 add_dependencies(microros libmicroros_project)

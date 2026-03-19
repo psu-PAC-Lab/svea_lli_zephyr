@@ -53,7 +53,7 @@ configure_toolchain: $(COMPONENT_PATH)/zephyr_toolchain.cmake.in
 	cat $(COMPONENT_PATH)/zephyr_toolchain.cmake.in | \
 		sed "s/@CMAKE_C_COMPILER@/$(subst /,\/,$(X_CC))/g" | \
 		sed "s/@CMAKE_CXX_COMPILER@/$(subst /,\/,$(X_CXX))/g" | \
-		sed "s/@CMAKE_SYSROOT@/$(subst /,\/,$(COMPONENT_PATH))/g" | \
+		sed "s/@CMAKE_SYSROOT@/$(subst /,\/,$(X_SYSROOT))/g" | \
 		sed "s/@CFLAGS@/$(subst /,\/,$(CFLAGS_INTERNAL))/g" | \
 		sed "s/@CXXFLAGS@/$(subst /,\/,$(CXXFLAGS_INTERNAL))/g" \
 		> $(COMPONENT_PATH)/zephyr_toolchain.cmake
