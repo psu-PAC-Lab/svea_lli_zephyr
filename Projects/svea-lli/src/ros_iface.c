@@ -19,6 +19,7 @@
 #include <sensor_msgs/msg/battery_state.h>
 #include <sensor_msgs/msg/temperature.h>
 #include <std_msgs/msg/bool.h>
+#include <std_msgs/msg/float32_multi_array.h>
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/u_int8.h>
 #include <zephyr/device.h>
@@ -78,11 +79,16 @@ rcl_publisher_t imu_pub, encoders_pub, ina3221_pub, battery_pub, mcp9600_pub, mc
 
 // Subscriptions - ensure proper alignment
 static rcl_subscription_t sub_steer, sub_throttle, sub_gear, sub_diff, sub_mcp4725_cmd;
+static rcl_subscription_t sub_mcp9600, sub_ina238_aux, sub_ina238_fan, sub_mcp4725_feedback;
 static std_msgs__msg__Int8 submsg_steer __aligned(4);
 static std_msgs__msg__Int8 submsg_throttle __aligned(4);
 static std_msgs__msg__Bool submsg_gear __aligned(4);
 static std_msgs__msg__Bool submsg_diff __aligned(4);
 static std_msgs__msg__Float32 submsg_mcp4725_cmd __aligned(4);
+static sensor_msgs__msg__Temperature submsg_mcp9600 __aligned(4);
+static std_msgs__msg__Float32MultiArray submsg_ina238_aux __aligned(4);
+static std_msgs__msg__Float32MultiArray submsg_ina238_fan __aligned(4);
+static std_msgs__msg__Float32MultiArray submsg_mcp4725_feedback __aligned(4);
 
 // Time synchronization variables
 static uint64_t epoch_off_ns;
@@ -150,6 +156,38 @@ static void mcp4725_cmd_cb(const void *msg) {
     }
 }
 
+static void mcp9600_cb(const void *msg) {
+    const sensor_msgs__msg__Temperature *temp_msg = (const sensor_msgs__msg__Temperature *)msg;
+#if LOG_LEVEL >= LOG_LEVEL_DBG
+    LOG_DBG("Received MCP9600 temperature: %.2f K", temp_msg->temperature);
+#endif
+    // Store or process temperature data as needed
+}
+
+static void ina238_aux_cb(const void *msg) {
+    const std_msgs__msg__Float32MultiArray *data_msg = (const std_msgs__msg__Float32MultiArray *)msg;
+#if LOG_LEVEL >= LOG_LEVEL_DBG
+    LOG_DBG("Received INA238_AUX data array with %zu values", data_msg->data.size);
+#endif
+    // Store or process auxiliary power data as needed
+}
+
+static void ina238_fan_cb(const void *msg) {
+    const std_msgs__msg__Float32MultiArray *data_msg = (const std_msgs__msg__Float32MultiArray *)msg;
+#if LOG_LEVEL >= LOG_LEVEL_DBG
+    LOG_DBG("Received INA238_FAN data array with %zu values", data_msg->data.size);
+#endif
+    // Store or process fan power data as needed
+}
+
+static void mcp4725_feedback_cb(const void *msg) {
+    const std_msgs__msg__Float32MultiArray *data_msg = (const std_msgs__msg__Float32MultiArray *)msg;
+#if LOG_LEVEL >= LOG_LEVEL_DBG
+    LOG_DBG("Received MCP4725 feedback array with %zu values", data_msg->data.size);
+#endif
+    // Store or process DAC feedback as needed
+}
+
 // Create allocator, support, pub, sub, executor for node if agent connection is successful
 bool create_entities() {
     allocator = rcl_get_default_allocator();
@@ -201,14 +239,22 @@ bool create_entities() {
     RCCHECK(rclc_subscription_init_best_effort(&sub_gear, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/high_gear"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_diff, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "/lli/ctrl/diff"));
     RCCHECK(rclc_subscription_init_best_effort(&sub_mcp4725_cmd, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "/lli/cmd/mcp4725"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_mcp9600, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Temperature), "/lli/sensor/mcp9600"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_ina238_aux, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina238_aux"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_ina238_fan, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/ina238_fan"));
+    RCCHECK(rclc_subscription_init_best_effort(&sub_mcp4725_feedback, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/lli/sensor/mcp4725"));
 
     // Executor
-    RCCHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));
+    RCCHECK(rclc_executor_init(&executor, &support.context, 9, &allocator));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_steer, &submsg_steer, steer_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_throttle, &submsg_throttle, throttle_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_gear, &submsg_gear, gear_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_diff, &submsg_diff, diff_cb, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &sub_mcp4725_cmd, &submsg_mcp4725_cmd, mcp4725_cmd_cb, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &sub_mcp9600, &submsg_mcp9600, mcp9600_cb, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &sub_ina238_aux, &submsg_ina238_aux, ina238_aux_cb, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &sub_ina238_fan, &submsg_ina238_fan, ina238_fan_cb, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &sub_mcp4725_feedback, &submsg_mcp4725_feedback, mcp4725_feedback_cb, ON_NEW_DATA));
 
     return true;
 }
@@ -238,6 +284,10 @@ bool destroy_entities() {
     RCSOFTCHECK(rcl_subscription_fini(&sub_gear, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_diff, &node));
     RCSOFTCHECK(rcl_subscription_fini(&sub_mcp4725_cmd, &node));
+    RCSOFTCHECK(rcl_subscription_fini(&sub_mcp9600, &node));
+    RCSOFTCHECK(rcl_subscription_fini(&sub_ina238_aux, &node));
+    RCSOFTCHECK(rcl_subscription_fini(&sub_ina238_fan, &node));
+    RCSOFTCHECK(rcl_subscription_fini(&sub_mcp4725_feedback, &node));
     RCSOFTCHECK(rclc_executor_fini(&executor));
     RCSOFTCHECK(rcl_node_fini(&node));
     RCSOFTCHECK(rclc_support_fini(&support));
