@@ -1,5 +1,13 @@
 {
     "terminal.integrated.defaultProfile.linux": "Zephyr IDE Terminal",
+    "terminal.integrated.env.linux": {
+        "WEST_TOPDIR": "/workdir",
+        "ZEPHYR_BASE": "/workdir/external/zephyr",
+        "PATH": "/opt/zephyr-venv/bin:${env:PATH}"
+    },
+    "zephyr-ide.venv-folder": "/opt/zephyr-venv",
+    "python.defaultInterpreterPath": "/opt/zephyr-venv/bin/python",
+    "terminal.integrated.cwd": "/workdir",
     "C_Cpp.default.compileCommands": "${workspaceFolder}/.vscode/compile_commands.json",
     "cmake.configureOnOpen": false,
     "files.associations": {

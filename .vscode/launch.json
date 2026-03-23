@@ -9,14 +9,14 @@
       "request": "launch",
       "type": "cortex-debug",
       "servertype": "openocd",
-      "serverpath": "/opt/homebrew/bin/openocd",
+      "serverpath": "openocd",
       "openOCDLaunchCommands": [
         "transport select swd",
         "adapter speed 1000"
       ],
       "configFiles": [
-        "/opt/homebrew/share/openocd/scripts/interface/cmsis-dap.cfg",
-        "/opt/homebrew/share/openocd/scripts/target/stm32f7x.cfg"
+        "interface/cmsis-dap.cfg",
+        "target/stm32f7x.cfg"
       ],
       "postLaunchCommands": [
         "monitor reset halt",
@@ -26,7 +26,10 @@
         "continue"
       ],
       "rtos": "Zephyr",
-      "searchDir": [],
+      "searchDir": [
+        "/opt/homebrew/share/openocd/scripts",
+        "/usr/share/openocd/scripts"
+      ],
       "runToEntryPoint": "main",
       "showDevDebugOutput": "raw",
       "rttConfig": {

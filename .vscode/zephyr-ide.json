@@ -4,68 +4,13 @@
       "rel_path": "Projects/svea-lli",
       "name": "svea-lli",
       "buildConfigs": {
-        "build/clicker4_stm32f7": {
+        "../../build/svea-lli/clicker4_stm32f7": {
           "relBoardDir": "boards",
           "relBoardSubDir": "arm/clicker4_stm32f7",
           "board": "clicker4_stm32f7",
-          "name": "build/clicker4_stm32f7",
+          "name": "../../build/svea-lli/clicker4_stm32f7",
           "westBuildArgs": "",
           "westBuildCMakeArgs": " -DCONFIG_SPEED_OPTIMIZATIONS=y ",
-          "confFiles": {
-            "config": [],
-            "extraConfig": [],
-            "overlay": [],
-            "extraOverlay": []
-          },
-          "runnerConfigs": {
-            "openocd": {
-              "runner": "openocd",
-              "name": "openocd",
-              "args": "--config interface/cmsis-dap.cfg --config target/stm32f7x.cfg"
-            }
-          }
-        },
-        "build/clicker4_stm32f7_DEBUG": {
-          "relBoardDir": "boards",
-          "relBoardSubDir": "arm/clicker4_stm32f7",
-          "board": "clicker4_stm32f7",
-          "name": "build/clicker4_stm32f7_DEBUG",
-          "westBuildArgs": "",
-          "westBuildCMakeArgs": "-DCONFIG_DEBUG_OPTIMIZATIONS=n -DCONFIG_DEBUG_THREAD_INFO=y -DCONFIG_USE_SEGGER_RTT=y -DCONFIG_LOG=y -DCONFIG_LOG_DEFAULT_LEVEL=3 -DCONFIG_LOG_BACKEND_RTT=y -DCONFIG_LOG_BACKEND_UART=y -DCONFIG_UART_CONSOLE=y",
-          "confFiles": {
-            "config": [],
-            "extraConfig": [],
-            "overlay": [],
-            "extraOverlay": []
-          },
-          "runnerConfigs": {
-            "openocd": {
-              "runner": "openocd",
-              "name": "openocd",
-              "args": "--config interface/cmsis-dap.cfg --config target/stm32f7x.cfg"
-            }
-          }
-        }
-      },
-      "twisterConfigs": {},
-      "confFiles": {
-        "config": [],
-        "extraConfig": [],
-        "overlay": [],
-        "extraOverlay": []
-      }
-    },
-    "6dof_motion_drdy": {
-      "rel_path": "external/zephyr/samples/sensor/6dof_motion_drdy",
-      "name": "6dof_motion_drdy",
-      "buildConfigs": {
-        "build/clicker4_stm32f7": {
-          "relBoardDir": "boards",
-          "relBoardSubDir": "arm/clicker4_stm32f7",
-          "board": "clicker4_stm32f7",
-          "name": "build/clicker4_stm32f7",
-          "westBuildArgs": "",
-          "westBuildCMakeArgs": " -DCONFIG_DEBUG_OPTIMIZATIONS=y -DCONFIG_DEBUG_THREAD_INFO=y ",
           "confFiles": {
             "config": [],
             "extraConfig": [],
@@ -80,13 +25,13 @@
             }
           }
         },
-        "build/clicker4_stm32": {
+        "../../build/svea-lli/clicker4_stm32f7_DEBUG": {
           "relBoardDir": "boards",
-          "relBoardSubDir": "arm/clicker4_stm32",
-          "board": "clicker4_stm32",
-          "name": "build/clicker4_stm32",
+          "relBoardSubDir": "arm/clicker4_stm32f7",
+          "board": "clicker4_stm32f7",
+          "name": "../../build/svea-lli/clicker4_stm32f7_DEBUG",
           "westBuildArgs": "",
-          "westBuildCMakeArgs": " -DCONFIG_DEBUG_OPTIMIZATIONS=y -DCONFIG_DEBUG_THREAD_INFO=y ",
+          "westBuildCMakeArgs": "-DCONFIG_DEBUG_OPTIMIZATIONS=n -DCONFIG_DEBUG_THREAD_INFO=y -DCONFIG_USE_SEGGER_RTT=y -DCONFIG_LOG=y -DCONFIG_LOG_DEFAULT_LEVEL=3 -DCONFIG_LOG_BACKEND_RTT=y -DCONFIG_LOG_BACKEND_UART=y -DCONFIG_UART_CONSOLE=y",
           "confFiles": {
             "config": [],
             "extraConfig": [],

@@ -5,19 +5,47 @@
 
 set -euo pipefail
 
+cd /workdir
+
+export WEST_TOPDIR="${WEST_TOPDIR:-/workdir}"
+export ZEPHYR_BASE="${ZEPHYR_BASE:-/workdir/external/zephyr}"
+VENV_DIR="/opt/zephyr-venv"
+PROJECT_BUILD_DIR="/workdir/Projects/svea-lli/build"
+CONTAINER_BUILD_DIR="/vscode/build-cache/svea-lli/build"
+
+mkdir -p "${CONTAINER_BUILD_DIR}"
+mkdir -p "${PROJECT_BUILD_DIR}"
+if ! mountpoint -q "${PROJECT_BUILD_DIR}"; then
+  mount --bind "${CONTAINER_BUILD_DIR}" "${PROJECT_BUILD_DIR}" || true
+fi
+
+if [ -d "${VENV_DIR}/bin" ]; then
+  export PATH="${VENV_DIR}/bin:$PATH"
+fi
+
 git config --global --add safe.directory '*'
+
+if [ ! -x "${VENV_DIR}/bin/python" ]; then
+  rm -rf "${VENV_DIR}"
+  python3 -m venv "${VENV_DIR}"
+fi
+
+if [ -x "${VENV_DIR}/bin/pip" ]; then
+  "${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+  "${VENV_DIR}/bin/pip" install west >/dev/null 2>&1 || true
+fi
 
 # Ensure west workspace is initialized (idempotent)
 if [ ! -d .west ]; then
-  west init -l west-manifest || true
+  "${VENV_DIR}/bin/west" init -l west-manifest || true
 fi
 
-west update
-west zephyr-export || true
+"${VENV_DIR}/bin/west" update || true
+"${VENV_DIR}/bin/west" zephyr-export || true
 
 # Source Zephyr env if present (optional)
-if [ -f /workdir/zephyr/zephyr-env.sh ]; then
-  . /workdir/zephyr/zephyr-env.sh || true
+if [ -f /workdir/external/zephyr/zephyr-env.sh ]; then
+  . /workdir/external/zephyr/zephyr-env.sh || true
 fi
 
 # If arguments were provided, exec them; otherwise finish quietly
