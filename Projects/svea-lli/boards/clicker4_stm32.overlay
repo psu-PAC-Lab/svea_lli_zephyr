@@ -2,7 +2,7 @@
     current-speed = <115200>;
     bq769x0: bq769x0@8 {
         compatible = "ti,bq769x0";
-        reg = <0x08>;
+        reg = <0x0 0x08 0x1>;
         alert-gpios = <&gpioa 8 GPIO_ACTIVE_HIGH>;
         pchg-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
         status = "okay";
@@ -195,17 +195,16 @@
     wheel_encoders: wheel_encoders {
         compatible = "gpio-keys";
         status = "disabled";
+        debounce-interval-ms = <1>;
         wheel_left: wheel_left {
             gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>;
             zephyr,code = <INPUT_KEY_0>;
             label = "WHEEL_LEFT";
-            debounce-us = <1000>;
         };
         wheel_right: wheel_right {
             gpios = <&gpioi 10 GPIO_ACTIVE_HIGH>;
             zephyr,code = <INPUT_KEY_1>;
             label = "WHEEL_RIGHT";
-            debounce-us = <1000>;
         };
     };
 };
